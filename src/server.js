@@ -1,53 +1,152 @@
+import fs from 'fs';
+import process from 'process';
 import path from 'path';
-import express from 'express';
+import os from 'os';
 import childProcess from 'child_process';
-import axios from 'axios';
+import express from 'express';
+import chalk from 'chalk';
 
-const app = express();
-const port = 27015;
+import args from '@/args';
+import log from '@/log';
+import config from '@/config';
+import store from '@/store';
+import api from '@/api';
+import execCommand from '@/commands';
+import {getCPUUsage, getNetStats} from '@/utils/system';
 
-let armaServer = null;
+if (config === null) {
+  log.error("Config is not loaded, aborting");
+  process.exit();
+}
 
-app.get('/status', (req, res) => {
-  res.json({
-    serverOnline: armaServer !== null
-  });
-});
+Promise.all([
+  // Server exec
+  new Promise((resolve, reject) => {
+    fs.access(
+      path.join(config.armaServerInstallPath, config.armaServerExe),
+      fs.constants.X_OK,
+      error => {
+        log[error ? "invalid" : "valid"](`${config.armaServerExe} ${error ? 'is not executable' : 'is executable'}`);
+        error ? reject() : resolve();
+      }
+    );
+  }),
+  // Headless exec
+  new Promise((resolve, reject) => {
+    fs.access(
+      path.join(config.armaServerInstallPath, config.armaHeadlessExe),
+      fs.constants.X_OK,
+      error => {
+        log[error ? "invalid" : "valid"](config.armaHeadlessExe, error ? 'is not executable' : 'is executable');
+        error ? reject() : resolve();
+      }
+    );
+  }),
+  // MPMissions writable
+  new Promise((resolve, reject) => {
+    fs.access(
+      config.armaMissionsPath,
+      fs.constants.W_OK,
+      error => {
+        log[error ? "invalid" : "valid"]('MPMissions', error ? 'is not writable' : 'is writable');
+        error ? reject() : resolve();
+      }
+    );
+  }),
+  // Sys restart bat
+  new Promise((resolve, reject) => {
+    fs.access(
+      config.systemRestartBatPath,
+      fs.constants.X_OK,
+      error => {
+        log[error ? "invalid" : "valid"]('System restart BAT', error ? 'is not executable' : 'is executable');
+        error ? reject() : resolve();
+      }
+    );
+  }),
+]).then(() => {
+  log("");
 
-app.get('/command/:command', (req, res) => {
-  if (req.params.command === 'startserver') {
-    return res.json({
-      error: (armaServer = startServer()) === null
+  const app = express();
+
+  if (args.debug) {
+    app.use((req, res, next) => {
+      const oldWrite = res.write, oldEnd = res.end;
+      let chunks = [];
+
+      res.write = function (chunk) {
+        chunks.push(Buffer.from(chunk));
+        oldWrite.apply(res, arguments);
+      };
+
+      res.end = function (chunk) {
+        if (chunk) chunks.push(Buffer.from(chunk));
+        const body = Buffer.concat(chunks).toString('utf8');
+        log.debug("Request", req.path, body);
+        oldEnd.apply(res, arguments);
+      };
+
+      next();
     });
   }
-});
 
-app.listen(port, () => {
-  console.log('Web server is listening on port', port);
-});
-
-function startServer() {
-  const armaDir = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Arma 3 Server';
-  const armaExec = path.join(armaDir, 'arma3server_x64.exe');
-
-  console.log('Launching arma server', armaExec);
-  const armaServerProcess = childProcess.spawn(armaExec, [], {});
-
-  armaServerProcess.on('error', error => {
-    console.error('Arma 3 Server process error:', error.message);
+  app.get('/status', (req, res) => {
+    res.json(store.getStatus());
   });
 
-  if (!armaServerProcess.pid) {
-    console.error('Arma 3 Server launch failed');
-    return null;
-  }
+  app.get('/missions', (req, res) => {
+    const missions = [];
 
-  console.log('Arma 3 Server launched with pid', armaServerProcess.pid);
+    fs.readdirSync(config.armaMissionsPath).forEach(file => {
+      const stats = fs.statSync(path.join(config.armaMissionsPath, file));
 
-  armaServerProcess.on('close', code => {
-    console.log('Arma 3 Server closed with code', code);
-    armaServer = null;
+      missions.push({
+        file,
+        size: stats.size,
+        lastModified: stats.mtimeMs
+      });
+    });
+
+    missions.sort((a, b) => b.lastModified - a.lastModified);
+
+    res.json(missions);
   });
 
-  return armaServerProcess;
-}
+  app.get('/command/:id', (req, res) => {
+    const commandId = parseInt(req.params.id);
+    if (isNaN(commandId)) return res.json({
+      success: false,
+      error: "Niepoprawne ID komendy"
+    });
+
+    api.getCommand(commandId).then(
+      data => execCommand(data.command, data.params)
+        .then(message => res.json({success: true, message}))
+        .catch(error => res.json({success: false, error}))
+    ).catch(error => res.json({success: false, error}));
+  });
+
+
+  app.get('/system', (req, res) => {
+    Promise.all([getCPUUsage(), getNetStats()]).then(data => {
+      res.json({
+        uptime: os.uptime(),
+        memory: {
+          total: os.totalmem(),
+          free: os.freemem()
+        },
+        cpus: data[0],
+        net: data[1]
+      });
+    });
+  });
+
+  app.listen(config.webServerPort, () => {
+    log('Web handler is ready and listening on port', chalk.yellowBright(config.webServerPort));
+    log('');
+  });
+}).catch(() => {
+  log("");
+  log.error("Config validation not passed, aborting");
+  process.exit();
+});
