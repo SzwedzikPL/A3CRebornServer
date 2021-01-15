@@ -47,7 +47,7 @@ function stop(processName) {
   return new Promise((resolve, reject) => {
     if (!store.isValidProcessName(processName)) return reject("Nieznana nazwa procesu");
     const processTitle = processName === "server" ? "Serwer" : "Headless";
-    if (!store.isProcessRunning(processName)) return reject(`${processTitle} jest już uruchomiony`);
+    if (!store.isProcessRunning(processName)) return reject(`${processTitle} nie jest uruchomiony`);
     const armaProcess = store.getProcess(processName);
 
     Promise.race([
