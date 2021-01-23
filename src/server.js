@@ -5,6 +5,7 @@ import os from 'os';
 import childProcess from 'child_process';
 import express from 'express';
 import chalk from 'chalk';
+import ipUtil from 'ip';
 
 import args from '@/args';
 import log from '@/log';
@@ -90,11 +91,30 @@ Promise.all([
     });
   }
 
+  app.use((req, res, next) => {
+    let ipAddress = req.ip;
+
+    if(ipUtil.isV6Format(ipAddress) && ~ipAddress.indexOf('::ffff'))
+      ipAddress = ipAddress.split('::ffff:')[1];
+
+    if(ipUtil.isV4Format(ipAddress) && ~ipAddress.indexOf(':'))
+      ipAddress = ipAddress.split(':')[0];
+
+    if (ipAddress !== config.apiIP) {
+      res.status(403);
+      res.send("Brak dostępu");
+    }
+
+    next();
+  });
+
   app.get('/status', (req, res) => {
+    if (res.finished) return;
     res.json(store.getStatus());
   });
 
   app.get('/missions', (req, res) => {
+    if (res.finished) return;
     const missions = [];
 
     fs.readdirSync(config.armaMissionsPath).forEach(file => {
@@ -113,6 +133,7 @@ Promise.all([
   });
 
   app.get('/command/:id', (req, res) => {
+    if (res.finished) return;
     const commandId = parseInt(req.params.id);
     if (isNaN(commandId)) return res.json({
       success: false,
@@ -128,6 +149,7 @@ Promise.all([
 
 
   app.get('/system', (req, res) => {
+    if (res.finished) return;
     Promise.all([getCPUUsage(), getNetStats()]).then(data => {
       res.json({
         uptime: os.uptime(),
