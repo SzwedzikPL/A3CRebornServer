@@ -14,6 +14,7 @@ import store from '@/store';
 import api from '@/api';
 import execCommand from '@/commands';
 import {getCPUUsage, getNetStats} from '@/utils/system';
+import {getMissions} from '@/utils/missions';
 
 if (config === null) {
   log.error("Config is not loaded, aborting");
@@ -115,21 +116,7 @@ Promise.all([
 
   app.get('/missions', (req, res) => {
     if (res.finished) return;
-    const missions = [];
-
-    fs.readdirSync(config.armaMissionsPath).forEach(file => {
-      const stats = fs.statSync(path.join(config.armaMissionsPath, file));
-
-      missions.push({
-        file,
-        size: stats.size,
-        lastModified: stats.mtimeMs
-      });
-    });
-
-    missions.sort((a, b) => b.lastModified - a.lastModified);
-
-    res.json(missions);
+    getMissions().then(missions => res.json(missions)).catch(() => res.json(null));
   });
 
   app.get('/command/:id', (req, res) => {

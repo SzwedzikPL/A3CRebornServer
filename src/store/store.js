@@ -9,12 +9,14 @@ const store = createStore({
   server: {
     process: null,
     startTimestamp: 0,
-    mode: ""
+    mode: "",
+    map: ""
   },
   headless: {
     process: null,
     startTimestamp: 0,
-    mode: ""
+    mode: "",
+    map: ""
   }
 });
 if (args.debug) {
@@ -32,12 +34,14 @@ const storeInterface = {
       server: {
         online: state.server.process !== null,
         startTimestamp: state.server.startTimestamp,
-        mode: state.server.mode
+        mode: state.server.mode,
+        map: state.server.map
       },
       headless: {
         online: state.headless.process !== null,
         startTimestamp: state.headless.startTimestamp,
-        mode: state.headless.mode
+        mode: state.headless.mode,
+        map: state.headless.map
       },
       system: {
         uptime: os.uptime()
@@ -46,12 +50,13 @@ const storeInterface = {
 
     return status;
   },
-  updateProcess: (processName, process, mode) => {
+  updateProcess: (processName, process, mode, map) => {
     if (!isValidProcessName(processName)) return;
     const update = {};
     update[processName] = {
       process,
       mode: process === null ? "" : mode,
+      map: process === null ? "" : map,
       startTimestamp: process === null ? 0 : Date.now()
     };
     store.setState(update);

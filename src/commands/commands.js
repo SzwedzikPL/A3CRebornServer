@@ -14,6 +14,7 @@ function start(processName, params) {
     if (!store.isValidProcessName(processName)) return reject("Nieznana nazwa procesu");
     if (store.isProcessRunning(processName)) return reject("Proces jest już uruchomiony");
     if (typeof params.mode !== "string" || !params.mode) return reject("Niepoprawny tryb uruchomienia");
+    if (typeof params.map !== "string" || !params.map) return reject("Niepoprawny tryb uruchomienia");
     if (!Array.isArray(params.arguments) || !params.arguments.length) return reject("Niepoprawna lista argumentów");
 
     const processTitle = processName === "server" ? "Serwer" : "Headless";
@@ -38,8 +39,8 @@ function start(processName, params) {
       store.updateProcess(processName, null);
     });
 
-    store.updateProcess(processName, armaProcess, params.mode);
-    resolve(`${processTitle} został uruchmiony w trybie ${params.mode}`);
+    store.updateProcess(processName, armaProcess, params.mode, params.map);
+    resolve(`${processTitle} został uruchmiony w trybie ${params.mode} (mapa: ${params.map})`);
   });
 }
 
