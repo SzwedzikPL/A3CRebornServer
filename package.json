@@ -21,7 +21,7 @@
     "url": "https://arma3coop.pl"
   },
   "dependencies": {
-    "axios": "0.21.1",
+    "axios": "0.21.2",
     "chalk": "4.1.0",
     "cpu-stats": "1.0.0",
     "express": "4.17.1",
